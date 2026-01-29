@@ -31,24 +31,17 @@ if %errorlevel% equ 0 (
 )
 
 echo.
-echo Fetching configuration from GitHub...
 
-:: Use PowerShell to fetch and parse JSON, then process each server configuration
-for /f "delims=" %%I in ('powershell -NoProfile -Command "try { $json = (Invoke-WebRequest -Uri '%JSON_URL%' -UseBasicParsing).Content ^| ConvertFrom-Json; $json ^| Get-Member -MemberType NoteProperty ^| ForEach-Object { $server = $json.($_.Name); $ip = $server.IP; if ($server.HOSTS_LIST -is [string]) { $hosts = @($server.HOSTS_LIST); } else { $hosts = $server.HOSTS_LIST; } foreach ($host in $hosts) { $hostsTrimmed = $host.Trim(); $found = @(Get-Content '%HOSTS_FILE%' ^| Select-String -Pattern \"\b$([regex]::Escape($hostsTrimmed))\b\" -Quiet); if ($found -eq $null -or $found -eq $false) { Add-Content -Path '%HOSTS_FILE%' -Value \"`$ip`t`$hostsTrimmed\"; Write-Host \"Adding: `$ip    `$hostsTrimmed\"; } else { Write-Host \"Already present: `$hostsTrimmed\"; } } } } catch { Write-Host \"Error: `$_\"; exit 1; }"') do (
-	@echo %%I
-)
+:: Get the directory where this script is located
+set SCRIPT_DIR=%~dp0
+set PS_SCRIPT=%SCRIPT_DIR%UpdateHosts.ps1
+
+:: Call PowerShell script
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -JsonUrl "%JSON_URL%" -HostsFile "%HOSTS_FILE%"
 if !errorlevel! neq 0 (
-	echo Error processing configuration. Please check your GitHub URL and JSON format.
+	echo Error processing configuration.
 	pause
 	exit /b 1
-)
-
-echo.
-echo Creating desktop shortcuts from configuration...
-
-:: Use PowerShell to create shortcuts from JSON
-for /f "delims=" %%I in ('powershell -NoProfile -Command "try { $json = (Invoke-WebRequest -Uri '%JSON_URL%' -UseBasicParsing).Content ^| ConvertFrom-Json; $desktopPath = [Environment]::GetFolderPath('Desktop'); $json ^| Get-Member -MemberType NoteProperty ^| ForEach-Object { $server = $json.($_.Name); if ($server.SHORTCUTS) { $server.SHORTCUTS ^| Get-Member -MemberType NoteProperty ^| ForEach-Object { $shortcutName = $_.Name; $shortcutUrl = $server.SHORTCUTS.($shortcutName); $shortcutPath = Join-Path $desktopPath \"$shortcutName.url\"; $shortcutContent = \"[InternetShortcut]\`nURL=$shortcutUrl\"; Set-Content -Path $shortcutPath -Value $shortcutContent -Force; Write-Host \"Shortcut created: $shortcutPath -> $shortcutUrl\"; } } } } catch { Write-Host \"Error creating shortcuts: `$_\"; }"') do (
-	@echo %%I
 )
 
 echo.
