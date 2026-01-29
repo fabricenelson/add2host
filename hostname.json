@@ -1,0 +1,17 @@
+{
+    "SRV1": {
+        "IP": "10.67.1.77",
+        "HOSTS_LIST": [
+            "cap-tel.local",
+            "cloud.cap-tel.local",
+            "ottercloud.io",
+            "captel.ottercloud.io",
+            "captel-metabase.ottercloud.io",
+            "captel-vpn.ottercloud.io",
+            "captel-nextcloud.ottercloud.io"
+        ],
+        "SHORTCUTS": {
+            "NEXTCLOUD": "https://captel.ottercloud.io/nextcloud"
+        }
+    }
+}

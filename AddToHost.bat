@@ -2,12 +2,12 @@
 rem ------------------------------------------------------------------
 rem AddToHost.bat — append host entries to Windows hosts file (idempotent)
 rem Usage: run as administrator; script will re-run itself elevated if needed
+rem Fetches configuration from GitHub: hostname.json
 rem ------------------------------------------------------------------
 
 setlocal EnableDelayedExpansion
 set HOSTS_FILE=%SystemRoot%\System32\drivers\etc\hosts
-set IP=10.67.1.77
-set HOSTS_LIST=cap-tel.local cloud.cap-tel.local ottercloud.io captel.ottercloud.io captel-metabase.ottercloud.io captel-vpn.ottercloud.io captel-nextcloud.ottercloud.io
+set JSON_URL=https://raw.githubusercontent.com/fabricenelson/add2host/refs/heads/main/hostname.json
 
 :: Check for administrator privileges using net session
 net session >nul 2>&1
@@ -31,25 +31,65 @@ if %errorlevel% equ 0 (
 )
 
 echo.
-for %%H in (%HOSTS_LIST%) do (
-	:: Check if hostname is already present (any line containing the hostname)
-	findstr /i /c:"%%H" "%HOSTS_FILE%" >nul 2>&1
-	if errorlevel 1 (
-		echo Adding: %IP%    %%H
-		>>"%HOSTS_FILE%" echo %IP%    %%H
-	) else (
-		echo Already present: %%H
-	)
+echo Fetching configuration from GitHub...
+
+:: Use PowerShell to fetch and parse JSON, then process each server configuration
+powershell -NoProfile -Command ^
+    "try { ^
+        $json = (Invoke-WebRequest -Uri '%JSON_URL%' -UseBasicParsing).Content | ConvertFrom-Json; ^
+        $json | Get-Member -MemberType NoteProperty | ForEach-Object { ^
+            $server = $json.($_.Name); ^
+            $ip = $server.IP; ^
+            if ($server.HOSTS_LIST -is [string]) { ^
+                $hosts = @($server.HOSTS_LIST); ^
+            } else { ^
+                $hosts = $server.HOSTS_LIST; ^
+            } ^
+            foreach ($host in $hosts) { ^
+                $hostsTrimmed = $host.Trim(); ^
+                $found = @(Get-Content '%HOSTS_FILE%' | Select-String -Pattern \"\b$([regex]::Escape($hostsTrimmed))\b\" -Quiet); ^
+                if ($found -eq $null -or $found -eq $false) { ^
+                    Add-Content -Path '%HOSTS_FILE%' -Value \"`$ip`t`$hostsTrimmed\"; ^
+                    Write-Host \"Adding: `$ip    `$hostsTrimmed\"; ^
+                } else { ^
+                    Write-Host \"Already present: `$hostsTrimmed\"; ^
+                } ^
+            } ^
+        } ^
+    } catch { ^
+        Write-Host \"Error: $_\"; ^
+        exit 1; ^
+    }"
+if %errorlevel% neq 0 (
+	echo Error processing configuration. Please check your GitHub URL and JSON format.
+	pause
+	exit /b 1
 )
 
 echo.
-echo Creating desktop shortcut to NextCloud...
-set SHORTCUT=%USERPROFILE%\Desktop\NextCloud.url
-(
-	echo [InternetShortcut]
-	echo URL=https://captel.ottercloud.io/nextcloud
-) > "%SHORTCUT%"
-echo Shortcut created: %SHORTCUT%
+echo Creating desktop shortcuts from configuration...
+
+:: Use PowerShell to create shortcuts from JSON
+powershell -NoProfile -Command ^
+    "try { ^
+        $json = (Invoke-WebRequest -Uri '%JSON_URL%' -UseBasicParsing).Content | ConvertFrom-Json; ^
+        $desktopPath = [Environment]::GetFolderPath('Desktop'); ^
+        $json | Get-Member -MemberType NoteProperty | ForEach-Object { ^
+            $server = $json.($_.Name); ^
+            if ($server.SHORTCUTS) { ^
+                $server.SHORTCUTS | Get-Member -MemberType NoteProperty | ForEach-Object { ^
+                    $shortcutName = $_.Name; ^
+                    $shortcutUrl = $server.SHORTCUTS.($shortcutName); ^
+                    $shortcutPath = Join-Path $desktopPath \"$shortcutName.url\"; ^
+                    $shortcutContent = \"[InternetShortcut]\`nURL=$shortcutUrl\"; ^
+                    Set-Content -Path $shortcutPath -Value $shortcutContent -Force; ^
+                    Write-Host \"Shortcut created: $shortcutPath -> $shortcutUrl\"; ^
+                } ^
+            } ^
+        } ^
+    } catch { ^
+        Write-Host \"Error creating shortcuts: $_\"; ^
+    }"
 
 echo.
 echo All done.
