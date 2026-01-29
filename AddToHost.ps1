@@ -1,5 +1,3 @@
-#Requires -RunAsAdministrator
-
 param(
     [string]$JsonUrl = "https://raw.githubusercontent.com/fabricenelson/add2host/refs/heads/main/hostname.json"
 )
@@ -12,7 +10,8 @@ $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administ
 if (-not $isAdmin) {
     Write-Host "Requesting administrator privileges..."
     $scriptPath = $PSCommandPath
-    Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs
+    $args = "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -JsonUrl `"$JsonUrl`""
+    Start-Process powershell -ArgumentList $args -Verb RunAs
     exit
 }
 
