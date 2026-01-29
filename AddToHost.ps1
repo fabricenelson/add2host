@@ -42,23 +42,25 @@ try {
     # Process hosts entries
     Write-Host ""
     Write-Host "Processing hosts entries..."
+    # Read hosts file once for efficiency
+    $hostsContent = Get-Content $HOSTS_FILE
+    
     $json | Get-Member -MemberType NoteProperty | ForEach-Object {
         $server = $json.($_.Name)
         $ip = $server.IP
         
         if ($server.HOSTS_LIST -is [string]) {
-            $hosts = @($server.HOSTS_LIST)
+            $hostnames = @($server.HOSTS_LIST)
         } else {
-            $hosts = $server.HOSTS_LIST
+            $hostnames = $server.HOSTS_LIST
         }
         
-        foreach ($host in $hosts) {
-            $hostsTrimmed = $host.Trim()
-            $hostsContent = Get-Content $HOSTS_FILE
-            $found = $hostsContent | Select-String -Pattern "\b$([regex]::Escape($hostsTrimmed))\b" -Quiet
+        foreach ($hostname in $hostnames) {
+            $hostsTrimmed = $hostname.Trim()
+            $found = $hostsContent | Select-String -Pattern "(\s|^)$([regex]::Escape($hostsTrimmed))(\s|$)" -Quiet
             
             if (-not $found) {
-                Add-Content -Path $HOSTS_FILE -Value "`n$ip`t$hostsTrimmed"
+                Add-Content -Path $HOSTS_FILE -Value "$ip`t$hostsTrimmed"
                 Write-Host "Adding: $ip    $hostsTrimmed"
             } else {
                 Write-Host "Already present: $hostsTrimmed"
